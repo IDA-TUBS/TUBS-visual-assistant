@@ -50,7 +50,7 @@ tubs-visual-assistant/
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/IDA-TUBS/TUBS-visual-assistant.gi
+git clone https://github.com/IDA-TUBS/TUBS-visual-assistant.git
 cd TUBS-visual-assistant
 ```
 
