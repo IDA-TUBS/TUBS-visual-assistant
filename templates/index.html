@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision Assistant</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body, html {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: "SF Pro Display", "Segoe UI", Arial, sans-serif;
+      background: black;
+      color: white;
+    }
+
+    /* Fullscreen camera video */
+    video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    /* Overlay container for UI elements */
+    .overlay {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 20px;
+      gap: 12px;
+      z-index: 2;
+    }
+
+    .prompt-box {
+      width: 90%;
+      max-width: 600px;
+      display: flex;
+      gap: 8px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 14px;
+      border-radius: 8px;
+      border: none;
+      font-size: 16px;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      backdrop-filter: blur(4px);
+      outline: none;
+      transition: background 0.2s;
+    }
+
+    input[type="text"]::placeholder {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    input[type="text"]:focus {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    button {
+      background: #007aff;
+      border: none;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 14px 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:disabled {
+      background: #555;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    button:hover:not(:disabled) {
+      background: #005fc4;
+    }
+
+    #response-box {
+      text-align: center;
+      font-size: 17px;
+      padding: 10px;
+      max-width: 80%;
+      margin: 0 auto;
+      color: #fff;
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
+      min-height: 30px;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Captured image preview */
+    #preview {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 120px;
+      height: 90px;
+      border-radius: 8px;
+      border: 2px solid rgba(255,255,255,0.6);
+      object-fit: cover;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+      display: none;
+      z-index: 3;
+    }
+
+    canvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <video id="camera" autoplay playsinline muted></video>
+
+  <img id="preview" alt="Preview" />
+
+  <div class="overlay">
+    <div id="response-box">👁️ Vision Assistant Ready</div>
+    <form id="vision-form" class="prompt-box">
+      <input type="text" id="prompt" name="prompt" placeholder="Ask or describe what to analyze..." />
+      <button id="send-btn" type="submit">Send</button>
+    </form>
+  </div>
+
+  <canvas id="snapshot" width="640" height="480"></canvas>
+
+  <script>
+    const video = document.getElementById("camera");
+    const canvas = document.getElementById("snapshot");
+    const ctx = canvas.getContext("2d");
+    const form = document.getElementById("vision-form");
+    const responseBox = document.getElementById("response-box");
+    const sendBtn = document.getElementById("send-btn");
+    const preview = document.getElementById("preview");
+
+    // Start fullscreen camera preview
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { 
+        responseBox.textContent = "⚠️ Unable to access camera: " + err.message;
+      });
+
+    // --- Speak text aloud (TTS) ---
+    function speak(text) {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel(); // stop previous speech
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      // Disable send button while processing
+      sendBtn.disabled = true;
+      sendBtn.textContent = "Processing...";
+      responseBox.textContent = "🔍 Analyzing image... please wait";
+      speak("Analyzing image. Please wait.");
+
+      // Capture current frame from video
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = canvas.toDataURL("image/jpeg");
+
+      // Show captured image preview
+      preview.src = imageData;
+      preview.style.display = "block";
+
+      // Prepare request
+      const formData = new FormData();
+      formData.append("prompt", document.getElementById("prompt").value);
+      formData.append("image", imageData);
+
+      try {
+        const res = await fetch("/process", { method: "POST", body: formData });
+        const data = await res.json();
+        responseBox.textContent = data.response || "No response received.";
+
+        // 🔊 Speak response aloud
+        if (data.response) speak(data.response);
+      } catch (err) {
+        responseBox.textContent = "❌ Error: " + err.message;
+        speak("An error occurred while analyzing the image.");
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Send";
+      }
+    });
+  </script>
+</body>
+</html>
